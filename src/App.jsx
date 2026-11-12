@@ -1,4 +1,5 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { PRIVACY_POLICY_TEXT } from "./PrivacyText";
 
 import photo1 from "./images/photo1.jpg";
 import photo2 from "./images/photo2.jpg";
@@ -16,7 +17,7 @@ const INITIAL_PRODUCTS = [
     material: "Глина",
     image: photo1,
     description:
-      "Лепила эти чашки еще прошлым летом, сейчас нашла и вспомнила. ",
+      "Лепила эти чашки еще прошлым летом, сейчас нашла и вспомнила.",
   },
   {
     id: 2,
@@ -52,7 +53,23 @@ const INITIAL_PRODUCTS = [
   },
 ];
 
-// Вспомогательный компонент для интерактивных кнопок с эффектом :hover
+// Частые вопросы
+const FAQ_ITEMS = [
+  {
+    q: "Можно ли мыть изделия в посудомоечной машине?",
+    a: "Изделия из высокотемпературной керамики (глазурованные) можно мыть в посудомойке на деликатном режиме. Изделия в технике раку и неглазурованную глину лучше мыть вручную.",
+  },
+  {
+    q: "Как осуществляется доставка в другие города?",
+    a: "Мы бережно упаковываем каждое изделие в несколько слоев пупырчатой пленки и отправляем СДЭКом или Почтой России с отметкой «Хрупкое».",
+  },
+  {
+    q: "Сколько времени занимает изготовление на заказ?",
+    a: "Полный цикл (лепка, сушка, два обжига и глазуровка) занимает от 2 до 3 недель в зависимости от сложности изделия.",
+  },
+];
+
+// Вспомогательный компонент для кнопок с hover
 function HoverButton({
   onClick,
   children,
@@ -72,6 +89,7 @@ function HoverButton({
     transition: "all 0.2s ease",
     fontSize: "14px",
     outline: "none",
+    whiteSpace: "nowrap",
     ...style,
   };
 
@@ -104,6 +122,8 @@ export default function App() {
   const [selectedCategory, setSelectedCategory] = useState("Все");
   const [cart, setCart] = useState([]);
   const [isCartOpen, setIsCartOpen] = useState(false);
+  const [isPrivacyOpen, setIsPrivacyOpen] = useState(false);
+  const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
 
   const [formData, setFormData] = useState({
     name: "",
@@ -112,12 +132,17 @@ export default function App() {
   });
   const [formSubmitted, setFormSubmitted] = useState(false);
 
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth <= 768);
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
   const filteredProducts =
     selectedCategory === "Все"
       ? products
       : products.filter((p) => p.category === selectedCategory);
 
-  // Добавление товара
   const addToCart = (product) => {
     const existingIndex = cart.findIndex((item) => item.id === product.id);
     if (existingIndex > -1) {
@@ -129,15 +154,21 @@ export default function App() {
     }
   };
 
-  // Удаление товара
+  const updateQuantity = (id, delta) => {
+    setCart((prevCart) =>
+      prevCart
+        .map((item) =>
+          item.id === id ? { ...item, quantity: item.quantity + delta } : item,
+        )
+        .filter((item) => item.quantity > 0),
+    );
+  };
+
   const removeFromCart = (id) => {
     setCart(cart.filter((item) => item.id !== id));
   };
 
-  // Общее количество штук (а не типов)
   const totalItemsCount = cart.reduce((sum, item) => sum + item.quantity, 0);
-
-  // Общая стоимость
   const totalPrice = cart.reduce(
     (sum, item) => sum + item.price * item.quantity,
     0,
@@ -152,52 +183,61 @@ export default function App() {
     }
   };
 
-  // Палитра стилей
   const themeStyles = {
     app: {
-      fontFamily: "Arial",
+      fontFamily: "'Segoe UI', Arial, sans-serif",
       backgroundColor: "#FBF9F6",
       color: "#3E3835",
       minHeight: "100vh",
       margin: 0,
-      padding: 0,
+      padding: isMobile ? "69px 0 0 0" : "81px 0 0 0",
+      overflowX: "hidden",
     },
     header: {
       display: "flex",
       justifyContent: "space-between",
       alignItems: "center",
-      padding: "20px 40px",
+      padding: isMobile ? "14px 16px" : "20px 40px",
       backgroundColor: "#FFF",
       borderBottom: "1px solid #E6DFD3",
-      position: "sticky",
+      position: "fixed",
       top: 0,
+      left: 0,
+      right: 0,
+      width: "100%",
+      boxSizing: "border-box",
       zIndex: 100,
+      boxShadow: "0 2px 10px rgba(62, 56, 53, 0.05)",
     },
     logo: {
-      fontSize: "24px",
+      fontSize: isMobile ? "20px" : "24px",
       fontWeight: "bold",
-      letterSpacing: "1px",
+      letterSpacing: "0.5px",
       color: "#C37B67",
+      whiteSpace: "nowrap",
     },
     hero: {
       textAlign: "center",
-      padding: "80px 20px",
+      padding: isMobile ? "50px 16px" : "80px 20px",
       background:
-        'linear-gradient(rgba(242, 235, 224, 0.85), rgba(251, 249, 246, 1)), url("https://images.unsplash.com/photo-1610701596007-11502861dcfa?w=1600&q=80")',
+        'linear-gradient(rgba(242, 235, 224, 0.88), rgba(251, 249, 246, 1)), url("https://images.unsplash.com/photo-1610701596007-11502861dcfa?w=1600&q=80")',
       backgroundSize: "cover",
       backgroundPosition: "center",
     },
     filterNav: {
       display: "flex",
       justifyContent: "center",
-      gap: "15px",
-      margin: "40px 0",
+      flexWrap: "wrap",
+      gap: isMobile ? "8px" : "15px",
+      margin: isMobile ? "24px 16px" : "40px 0",
     },
     grid: {
       display: "grid",
-      gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
-      gap: "30px",
-      padding: "0 40px 60px 40px",
+      gridTemplateColumns: isMobile
+        ? "1fr"
+        : "repeat(auto-fill, minmax(270px, 1fr))",
+      gap: isMobile ? "20px" : "30px",
+      padding: isMobile ? "0 16px 40px 16px" : "0 40px 60px 40px",
       maxWidth: "1200px",
       margin: "0 auto",
     },
@@ -205,19 +245,21 @@ export default function App() {
       backgroundColor: "#FFF",
       borderRadius: "12px",
       overflow: "hidden",
-      border: "3px solid #E6DFD3",
+      border: "2px solid #E6DFD3",
       display: "flex",
       flexDirection: "column",
+      boxShadow: "0 4px 12px rgba(0,0,0,0.03)",
     },
     cardImg: {
       width: "100%",
-      height: "240px",
+      height: isMobile ? "220px" : "240px",
       objectFit: "cover",
     },
     cardContent: {
       padding: "20px",
       display: "flex",
       flexDirection: "column",
+      flexGrow: 1,
     },
     tag: {
       fontSize: "12px",
@@ -229,7 +271,7 @@ export default function App() {
     meta: {
       fontSize: "13px",
       color: "#7A726E",
-      margin: "8px 0",
+      margin: "12px 0",
       fontStyle: "italic",
     },
     price: {
@@ -238,18 +280,45 @@ export default function App() {
       color: "#3E3835",
       marginTop: "auto",
       paddingTop: "15px",
+      borderTop: "1px solid #F3EFEA",
       display: "flex",
       justifyContent: "space-between",
       alignItems: "center",
     },
     sectionAbout: {
       backgroundColor: "#EAE3D5",
+      padding: isMobile ? "40px 16px" : "60px 40px",
       textAlign: "center",
+    },
+    aboutGrid: {
+      display: "grid",
+      gridTemplateColumns: isMobile ? "1fr" : "repeat(3, 1fr)",
+      gap: "20px",
+      maxWidth: "1100px",
+      margin: "30px auto 0 auto",
+    },
+    aboutCard: {
+      backgroundColor: "#FBF9F6",
+      padding: "24px",
+      borderRadius: "12px",
+      border: "1px solid #DCD2C0",
+    },
+    faqSection: {
+      maxWidth: "800px",
+      margin: isMobile ? "40px auto" : "60px auto",
+      padding: isMobile ? "0 16px" : "0 20px",
+    },
+    faqCard: {
+      backgroundColor: "#FFF",
+      padding: "20px",
+      borderRadius: "10px",
+      border: "1px solid #E6DFD3",
+      marginBottom: "15px",
     },
     formSection: {
       maxWidth: "500px",
-      margin: "60px auto",
-      padding: "30px",
+      margin: isMobile ? "40px 16px" : "60px auto",
+      padding: isMobile ? "24px 16px" : "30px",
       backgroundColor: "#FFF",
       borderRadius: "12px",
       border: "1px solid #E6DFD3",
@@ -258,25 +327,38 @@ export default function App() {
     input: {
       width: "100%",
       padding: "12px",
-      margin: "10px 0 20px 0",
-      borderRadius: "6px",
-      border: "3px solid #CBD5E1",
+      margin: "8px 0 18px 0",
+      borderRadius: "8px",
+      border: "2px solid #E6DFD3",
       boxSizing: "border-box",
+      fontSize: "14px",
+      fontFamily: "inherit",
     },
-    sidebar: {
+    modalOverlay: {
       position: "fixed",
       top: 0,
-      right: isCartOpen ? 0 : "-400px",
-      width: "350px",
-      height: "100vh",
-      backgroundColor: "#FFF",
-      boxShadow: "-5px 0 25px rgba(0,0,0,0.1)",
-      transition: "right 0.3s ease",
+      left: 0,
+      right: 0,
+      bottom: 0,
+      backgroundColor: "rgba(62, 56, 53, 0.55)",
+      backdropFilter: "blur(3px)",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
       zIndex: 1000,
-      padding: "30px",
-      boxSizing: "border-box",
+      padding: "16px",
+    },
+    modalContent: {
+      backgroundColor: "#FFF",
+      width: "100%",
+      maxWidth: "460px",
+      maxHeight: "85vh",
+      borderRadius: "16px",
+      padding: isMobile ? "20px" : "28px",
+      boxShadow: "0 15px 40px rgba(0,0,0,0.2)",
       display: "flex",
       flexDirection: "column",
+      boxSizing: "border-box",
     },
     filledBtn: {
       backgroundColor: "#C37B67",
@@ -289,7 +371,13 @@ export default function App() {
       {/* Навигация */}
       <header style={themeStyles.header}>
         <div style={themeStyles.logo}>Руки в глине</div>
-        <nav style={{ display: "flex", gap: "20px", alignItems: "center" }}>
+        <nav
+          style={{
+            display: "flex",
+            gap: isMobile ? "10px" : "20px",
+            alignItems: "center",
+          }}
+        >
           <a
             href="https://t.me/ala_pots"
             target="_blank"
@@ -301,6 +389,9 @@ export default function App() {
               justifyContent: "center",
               width: "40px",
               height: "40px",
+              minWidth: "40px",
+              minHeight: "40px",
+              flexShrink: 0,
               borderRadius: "50%",
               overflow: "hidden",
               cursor: "pointer",
@@ -321,8 +412,13 @@ export default function App() {
               }}
             />
           </a>
+
           <HoverButton
-            style={themeStyles.filledBtn}
+            style={{
+              ...themeStyles.filledBtn,
+              padding: isMobile ? "8px 14px" : "10px 20px",
+              fontSize: isMobile ? "13px" : "14px",
+            }}
             activeStyle={{ backgroundColor: "#A86452" }}
             onClick={() => setIsCartOpen(true)}
           >
@@ -334,25 +430,31 @@ export default function App() {
       {/* Промо-блок */}
       <section style={themeStyles.hero}>
         <h1
-          style={{ fontSize: "3rem", marginBottom: "10px", color: "#3E3835" }}
+          style={{
+            fontSize: isMobile ? "2rem" : "3rem",
+            marginBottom: "12px",
+            color: "#3E3835",
+            lineHeight: 1.2,
+          }}
         >
           Тепло рук в каждом изделии
         </h1>
         <p
           style={{
-            fontSize: "1.2rem",
+            fontSize: isMobile ? "1rem" : "1.2rem",
             color: "#7A726E",
             maxWidth: "600px",
-            margin: "0 auto 30px auto",
+            margin: "0 auto 28px auto",
           }}
         >
-          Авторская керамика ручной работы
+          Авторская керамика ручной работы, созданная с душой и вниманием к
+          деталям
         </p>
         <HoverButton
           style={{
             ...themeStyles.filledBtn,
-            padding: "12px 30px",
-            fontSize: "16px",
+            padding: isMobile ? "10px 24px" : "12px 30px",
+            fontSize: isMobile ? "15px" : "16px",
           }}
           activeStyle={{ backgroundColor: "#A86452" }}
           onClick={() =>
@@ -368,17 +470,25 @@ export default function App() {
       {/* Секция витрины */}
       <main id="catalog" style={{ padding: "20px 0" }}>
         <h2
-          style={{ textAlign: "center", fontSize: "2rem", marginTop: "20px" }}
+          style={{
+            textAlign: "center",
+            fontSize: isMobile ? "1.6rem" : "2rem",
+            marginTop: "10px",
+          }}
         >
           Коллекции из мастерской
         </h2>
 
-        {/* Фильтры категорий */}
+        {/* Фильтры */}
         <div style={themeStyles.filterNav}>
           {["Все", "Чашки", "Куклы", "Фигурки"].map((cat) => (
             <HoverButton
               key={cat}
-              style={selectedCategory === cat ? themeStyles.filledBtn : {}}
+              style={{
+                ...(selectedCategory === cat ? themeStyles.filledBtn : {}),
+                padding: isMobile ? "8px 14px" : "10px 20px",
+                fontSize: isMobile ? "13px" : "14px",
+              }}
               activeStyle={
                 selectedCategory === cat ? { backgroundColor: "#A86452" } : {}
               }
@@ -407,7 +517,7 @@ export default function App() {
                   style={{
                     fontSize: "14px",
                     color: "#666",
-                    lineHeight: "1.4",
+                    lineHeight: "1.45",
                     margin: "0",
                   }}
                 >
@@ -422,7 +532,7 @@ export default function App() {
                 <div style={themeStyles.price}>
                   <span>{product.price} ₽</span>
                   <HoverButton
-                    style={{ padding: "6px 14px", fontSize: "13px" }}
+                    style={{ padding: "8px 14px", fontSize: "13px" }}
                     onClick={() => addToCart(product)}
                   >
                     + В корзину
@@ -434,13 +544,91 @@ export default function App() {
         </div>
       </main>
 
+      {/* О мастерской */}
+      <section style={themeStyles.sectionAbout}>
+        <h2
+          style={{
+            fontSize: isMobile ? "1.6rem" : "2rem",
+            marginTop: 0,
+            marginBottom: "10px",
+          }}
+        >
+          О мастерской «Руки в глине»
+        </h2>
+        <p
+          style={{
+            maxWidth: "650px",
+            margin: "0 auto",
+            color: "#5C5450",
+            lineHeight: 1.5,
+            fontSize: isMobile ? "14px" : "16px",
+          }}
+        >
+          Каждая вещь лепится вручную без использования гончарных шаблонов.
+          Поэтому вы никогда не найдете двух абсолютно одинаковых кружек или
+          фигурок — у каждой свой характер.
+        </p>
+
+        <div style={themeStyles.aboutGrid}>
+          <div style={themeStyles.aboutCard}>
+            <h4 style={{ margin: "0 0 8px 0" }}>100% ручная лепка</h4>
+            <p style={{ margin: 0, fontSize: "14px", color: "#666" }}>
+              Каждое изделие хранит отпечаток пальцев мастера и живую фактуру
+              глины.
+            </p>
+          </div>
+          <div style={themeStyles.aboutCard}>
+            <h4 style={{ margin: "0 0 8px 0" }}>Двойной обжиг</h4>
+            <p style={{ margin: 0, fontSize: "14px", color: "#666" }}>
+              Обжигаем изделия в муфельной печи при температуре выше 1050 °C для
+              прочности.
+            </p>
+          </div>
+          <div style={themeStyles.aboutCard}>
+            <h4 style={{ margin: "0 0 8px 0" }}>Безопасные глазури</h4>
+            <p style={{ margin: 0, fontSize: "14px", color: "#666" }}>
+              Используем только пищевые бессвинцовые глазури, подходящие для
+              горячих напитков.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      {/* FAQ */}
+      <section style={themeStyles.faqSection}>
+        <h2
+          style={{
+            textAlign: "center",
+            fontSize: isMobile ? "1.6rem" : "2rem",
+            marginBottom: "25px",
+          }}
+        >
+          Частые вопросы
+        </h2>
+        {FAQ_ITEMS.map((item, idx) => (
+          <div key={idx} style={themeStyles.faqCard}>
+            <h4 style={{ margin: "0 0 8px 0", color: "#C37B67" }}>{item.q}</h4>
+            <p
+              style={{
+                margin: 0,
+                fontSize: "14px",
+                color: "#5C5450",
+                lineHeight: 1.5,
+              }}
+            >
+              {item.a}
+            </p>
+          </div>
+        ))}
+      </section>
+
       {/* Форма заявки */}
       <section style={themeStyles.formSection}>
         <h3 style={{ textAlign: "center", marginTop: 0, fontSize: "22px" }}>
           Хотите что-то особенное?
         </h3>
         <p style={{ textAlign: "center", color: "#666", fontSize: "14px" }}>
-          Оставьте заявку, и мы обсудим создание вашей "керамической" мечты!
+          Оставьте заявку, и мы обсудим создание вашей «керамической» мечты!
         </p>
 
         {formSubmitted ? (
@@ -454,7 +642,7 @@ export default function App() {
               marginTop: "20px",
             }}
           >
-            ✨ Спасибо! Мы свяжемся с вами в течение дня для обсуждения эскиза.
+            Спасибо! Мы свяжемся с вами в течение дня для обсуждения эскиза.
           </div>
         ) : (
           <form onSubmit={handleFormSubmit} style={{ marginTop: "20px" }}>
@@ -477,12 +665,12 @@ export default function App() {
             <label
               style={{ display: "block", fontWeight: "600", fontSize: "14px" }}
             >
-              Ваша почта
+              Ваша почта или Telegram
             </label>
             <input
               type="text"
               required
-              placeholder="example@test.com"
+              placeholder="example@test.com или @username"
               style={themeStyles.input}
               value={formData.phone}
               onChange={(e) =>
@@ -505,6 +693,42 @@ export default function App() {
               }
             />
 
+            <div
+              style={{
+                display: "flex",
+                alignItems: "flex-start",
+                gap: "10px",
+                marginBottom: "18px",
+              }}
+            >
+              <input
+                type="checkbox"
+                id="privacyCheck"
+                required
+                style={{
+                  marginTop: "3px",
+                  accentColor: "#C37B67",
+                  cursor: "pointer",
+                }}
+              />
+              <label
+                htmlFor="privacyCheck"
+                style={{ fontSize: "12px", color: "#666", lineHeight: "1.4" }}
+              >
+                Я соглашаюсь на обработку персональных данных в соответствии с{" "}
+                <span
+                  onClick={() => setIsPrivacyOpen(true)}
+                  style={{
+                    color: "#C37B67",
+                    textDecoration: "underline",
+                    cursor: "pointer",
+                  }}
+                >
+                  Политикой конфиденциальности
+                </span>
+              </label>
+            </div>
+
             <HoverButton
               type="submit"
               style={{
@@ -512,7 +736,7 @@ export default function App() {
                 width: "100%",
                 padding: "12px",
                 fontSize: "16px",
-                borderRadius: "6px",
+                borderRadius: "8px",
               }}
               activeStyle={{ backgroundColor: "#A86452" }}
             >
@@ -522,135 +746,301 @@ export default function App() {
         )}
       </section>
 
-      {/* Сайдбар корзины */}
-      <aside style={themeStyles.sidebar}>
+      {/* Модальное окно корзины */}
+      {isCartOpen && (
         <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            marginBottom: "30px",
-          }}
+          style={themeStyles.modalOverlay}
+          onClick={() => setIsCartOpen(false)}
         >
-          <h3 style={{ margin: 0 }}>Ваш заказ</h3>
-          <button
-            style={{
-              background: "none",
-              border: "none",
-              fontSize: "24px",
-              cursor: "pointer",
-              color: "#7A726E",
-            }}
-            onClick={() => setIsCartOpen(false)}
+          <div
+            style={themeStyles.modalContent}
+            onClick={(e) => e.stopPropagation()}
           >
-            ×
-          </button>
-        </div>
-
-        <div style={{ flexGrow: 1, overflowY: "auto" }}>
-          {cart.length === 0 ? (
-            <p
-              style={{
-                color: "#7A726E",
-                textAlign: "center",
-                marginTop: "40px",
-              }}
-            >
-              Корзина пока пуста. Самое время выбрать чашечку!
-            </p>
-          ) : (
-            cart.map((item) => (
-              <div
-                key={item.id}
-                style={{
-                  display: "flex",
-                  gap: "15px",
-                  padding: "10px 0",
-                  borderBottom: "1px solid #E6DFD3",
-                  alignItems: "center",
-                }}
-              >
-                <img
-                  src={item.image}
-                  alt={item.title}
-                  style={{
-                    width: "50px",
-                    height: "50px",
-                    objectFit: "cover",
-                    borderRadius: "6px",
-                  }}
-                />
-                <div style={{ flexGrow: 1 }}>
-                  <h4 style={{ margin: "0 0 5px 0", fontSize: "14px" }}>
-                    {item.title}
-                  </h4>
-                  <span style={{ fontSize: "13px", color: "#666" }}>
-                    {item.quantity} шт. × {item.price} ₽
-                  </span>
-                </div>
-                <button
-                  style={{
-                    background: "none",
-                    border: "none",
-                    color: "#E11D48",
-                    cursor: "pointer",
-                    fontSize: "16px",
-                  }}
-                  onClick={() => removeFromCart(item.id)}
-                >
-                  🗑️
-                </button>
-              </div>
-            ))
-          )}
-        </div>
-
-        {cart.length > 0 && (
-          <div style={{ paddingTop: "20px", borderTop: "1px solid #E6DFD3" }}>
             <div
               style={{
                 display: "flex",
                 justifyContent: "space-between",
-                fontWeight: "bold",
-                fontSize: "18px",
-                marginBottom: "20px",
+                alignItems: "center",
+                paddingBottom: "15px",
+                borderBottom: "1px solid #E6DFD3",
               }}
             >
-              <span>Итого:</span>
-              <span>{totalPrice} ₽</span>
+              <h3 style={{ margin: 0, fontSize: "20px" }}>Ваш заказ</h3>
+              <button
+                style={{
+                  background: "none",
+                  border: "none",
+                  fontSize: "28px",
+                  lineHeight: 1,
+                  cursor: "pointer",
+                  color: "#7A726E",
+                }}
+                onClick={() => setIsCartOpen(false)}
+              >
+                ×
+              </button>
             </div>
+
+            <div
+              style={{
+                flexGrow: 1,
+                overflowY: "auto",
+                margin: "15px 0",
+                paddingRight: "4px",
+              }}
+            >
+              {cart.length === 0 ? (
+                <p
+                  style={{
+                    color: "#7A726E",
+                    textAlign: "center",
+                    margin: "30px 0",
+                  }}
+                >
+                  Корзина пока пуста. Самое время выбрать чашечку!
+                </p>
+              ) : (
+                cart.map((item) => (
+                  <div
+                    key={item.id}
+                    style={{
+                      display: "flex",
+                      gap: "12px",
+                      padding: "12px 0",
+                      borderBottom: "1px solid #F3EFEA",
+                      alignItems: "center",
+                    }}
+                  >
+                    <img
+                      src={item.image}
+                      alt={item.title}
+                      style={{
+                        width: "54px",
+                        height: "54px",
+                        objectFit: "cover",
+                        borderRadius: "8px",
+                        flexShrink: 0,
+                      }}
+                    />
+                    <div style={{ flexGrow: 1 }}>
+                      <h4 style={{ margin: "0 0 4px 0", fontSize: "15px" }}>
+                        {item.title}
+                      </h4>
+                      <span style={{ fontSize: "13px", color: "#666" }}>
+                        {item.price} ₽ / шт.
+                      </span>
+
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "8px",
+                          marginTop: "6px",
+                        }}
+                      >
+                        <button
+                          onClick={() => updateQuantity(item.id, -1)}
+                          style={{
+                            width: "26px",
+                            height: "26px",
+                            borderRadius: "50%",
+                            border: "1px solid #C37B67",
+                            background: "none",
+                            color: "#C37B67",
+                            cursor: "pointer",
+                          }}
+                        >
+                          −
+                        </button>
+                        <span style={{ fontSize: "14px", fontWeight: "bold" }}>
+                          {item.quantity}
+                        </span>
+                        <button
+                          onClick={() => updateQuantity(item.id, 1)}
+                          style={{
+                            width: "26px",
+                            height: "26px",
+                            borderRadius: "50%",
+                            border: "1px solid #C37B67",
+                            background: "none",
+                            color: "#C37B67",
+                            cursor: "pointer",
+                          }}
+                        >
+                          +
+                        </button>
+                        <button
+                          style={{
+                            background: "none",
+                            border: "none",
+                            color: "#E11D48",
+                            cursor: "pointer",
+                            fontSize: "16px",
+                            marginLeft: "4px",
+                          }}
+                          title="Удалить"
+                          onClick={() => removeFromCart(item.id)}
+                        >
+                          ❌
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            {cart.length > 0 && (
+              <div
+                style={{ paddingTop: "15px", borderTop: "1px solid #E6DFD3" }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    fontWeight: "bold",
+                    fontSize: "18px",
+                    marginBottom: "15px",
+                  }}
+                >
+                  <span>Итого:</span>
+                  <span>{totalPrice} ₽</span>
+                </div>
+                <HoverButton
+                  style={{
+                    ...themeStyles.filledBtn,
+                    width: "100%",
+                    padding: "12px",
+                    fontSize: "16px",
+                    borderRadius: "8px",
+                  }}
+                  activeStyle={{ backgroundColor: "#A86452" }}
+                  onClick={() => {
+                    alert(
+                      `Заказ на сумму ${totalPrice} ₽ оформлен! Спасибо за покупку.`,
+                    );
+                    setCart([]);
+                    setIsCartOpen(false);
+                  }}
+                >
+                  Оформить покупку
+                </HoverButton>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Модальное окно Политики конфиденциальности */}
+      {/* Модальное окно Политики конфиденциальности */}
+      {isPrivacyOpen && (
+        <div
+          style={themeStyles.modalOverlay}
+          onClick={() => setIsPrivacyOpen(false)}
+        >
+          <div
+            style={{ ...themeStyles.modalContent, maxWidth: "600px" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Шапка модального окна с кнопкой закрытия */}
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                paddingBottom: "15px",
+                borderBottom: "1px solid #E6DFD3",
+              }}
+            >
+              <h3 style={{ margin: 0, fontSize: "18px" }}>
+                Политика конфиденциальности
+              </h3>
+              <button
+                style={{
+                  background: "none",
+                  border: "none",
+                  fontSize: "28px",
+                  lineHeight: 1,
+                  cursor: "pointer",
+                  color: "#7A726E",
+                }}
+                onClick={() => setIsPrivacyOpen(false)}
+              >
+                ×
+              </button>
+            </div>
+
+            {/* Ваш текст с прокруткой */}
+            <div
+              style={{
+                overflowY: "auto",
+                margin: "15px 0",
+                paddingRight: "8px",
+                fontSize: "13px",
+                lineHeight: "1.6",
+                color: "#4A4441",
+                whiteSpace: "pre-line",
+              }}
+            >
+              {PRIVACY_POLICY_TEXT}
+            </div>
+
+            {/* Кнопка закрытия внизу */}
             <HoverButton
               style={{
                 ...themeStyles.filledBtn,
                 width: "100%",
-                padding: "14px",
-                fontSize: "16px",
-                borderRadius: "6px",
+                padding: "10px",
+                borderRadius: "8px",
               }}
               activeStyle={{ backgroundColor: "#A86452" }}
-              onClick={() =>
-                alert(
-                  `Заказ на сумму ${totalPrice} ₽ оформлен! Спасибо за покупку.`,
-                )
-              }
+              onClick={() => setIsPrivacyOpen(false)}
             >
-              Оформить покупку
+              Понятно
             </HoverButton>
           </div>
-        )}
-      </aside>
+        </div>
+      )}
 
       {/* Футер */}
       <footer
         style={{
           backgroundColor: "#3E3835",
           color: "#E6DFD3",
-          padding: "30px 40px",
+          padding: isMobile ? "24px 16px" : "30px 40px",
           textAlign: "center",
           fontSize: "14px",
         }}
       >
-        © {new Date().getFullYear()} Руки в глине.
+        <div style={{ marginTop: "10px" }}>
+          <button
+            type="button"
+            onClick={() => setIsPrivacyOpen(true)}
+            style={{
+              background: "none",
+              border: "none",
+              color: "#A39B93",
+              textDecoration: "underline",
+              fontSize: "12px",
+              cursor: "pointer",
+            }}
+          >
+            Политика конфиденциальности
+          </button>
+        </div>
+
+        <div style={{ marginBottom: "8px" }}>
+          © {new Date().getFullYear()} Руки в глине. Авторская керамика ручной
+          работы.
+        </div>
+        <a
+          href="https://t.me/ala_pots"
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{ color: "#C37B67", textDecoration: "none" }}
+        >
+          Мы в Telegram: @ala_pots
+        </a>
       </footer>
     </div>
   );
