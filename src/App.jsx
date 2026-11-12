@@ -6,6 +6,13 @@ import photo2 from "./images/photo2.jpg";
 import photo3 from "./images/photo3.jpg";
 import photo4 from "./images/photo4.jpg";
 
+// ==========================================
+// НАСТРОЙКИ УВЕДОМЛЕНИЙ АДМИНИСТРАТОРУ
+// ==========================================
+const TG_BOT_TOKEN = "ВСТАВЬТЕ_ВАШ_ТОКЕН_БОТА"; // Например: "7123456789:AAH..."
+const TG_CHAT_ID = "ВСТАВЬТЕ_ВАШ_CHAT_ID"; // Например: "123456789"
+// ==========================================
+
 // База данных товаров
 const INITIAL_PRODUCTS = [
   {
@@ -69,13 +76,18 @@ const FAQ_ITEMS = [
   },
 ];
 
-// Вспомогательный компонент для кнопок с hover
+// Шрифты
+const FONT_BODY = "'Nunito', 'Segoe UI', sans-serif";
+const FONT_HEADING = "'Cormorant Garamond', Georgia, serif";
+
+// Кнопка с hover
 function HoverButton({
   onClick,
   children,
   style = {},
   activeStyle = {},
   type = "button",
+  disabled = false,
 }) {
   const [isHovered, setIsHovered] = useState(false);
 
@@ -85,28 +97,33 @@ function HoverButton({
     borderRadius: "20px",
     backgroundColor: "transparent",
     color: "#C37B67",
-    cursor: "pointer",
+    cursor: disabled ? "not-allowed" : "pointer",
+    opacity: disabled ? 0.6 : 1,
     transition: "all 0.2s ease",
     fontSize: "14px",
+    fontFamily: FONT_BODY,
+    fontWeight: "600",
     outline: "none",
     whiteSpace: "nowrap",
     ...style,
   };
 
-  const hoverEffect = isHovered
-    ? {
-        backgroundColor:
-          style.backgroundColor === "#C37B67"
-            ? "#A86452"
-            : "rgba(195, 123, 103, 0.1)",
-        transform: "translateY(-1px)",
-        ...activeStyle,
-      }
-    : {};
+  const hoverEffect =
+    isHovered && !disabled
+      ? {
+          backgroundColor:
+            style.backgroundColor === "#C37B67"
+              ? "#A86452"
+              : "rgba(195, 123, 103, 0.1)",
+          transform: "translateY(-1px)",
+          ...activeStyle,
+        }
+      : {};
 
   return (
     <button
       type={type}
+      disabled={disabled}
       onClick={onClick}
       style={{ ...baseStyle, ...hoverEffect }}
       onMouseEnter={() => setIsHovered(true)}
@@ -127,10 +144,19 @@ export default function App() {
 
   const [formData, setFormData] = useState({
     name: "",
-    phone: "",
+    contact: "",
     comment: "",
   });
   const [formSubmitted, setFormSubmitted] = useState(false);
+  const [isSendingCustom, setIsSendingCustom] = useState(false);
+
+  const [checkoutData, setCheckoutData] = useState({
+    name: "",
+    contact: "",
+    comment: "",
+  });
+  const [isCheckingOut, setIsCheckingOut] = useState(false);
+  const [orderSuccess, setOrderSuccess] = useState(false);
 
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth <= 768);
@@ -138,12 +164,45 @@ export default function App() {
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
+  // Отправка в Telegram
+  const sendToTelegram = async (messageText) => {
+    if (
+      !TG_BOT_TOKEN ||
+      TG_BOT_TOKEN === "ВСТАВЬТЕ_ВАШ_ТОКЕН_БОТА" ||
+      !TG_CHAT_ID ||
+      TG_CHAT_ID === "ВСТАВЬТЕ_ВАШ_CHAT_ID"
+    ) {
+      console.log("Тестовый режим. Текст сообщения:\n", messageText);
+      return true;
+    }
+
+    try {
+      const response = await fetch(
+        `https://api.telegram.org/bot${TG_BOT_TOKEN}/sendMessage`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            chat_id: TG_CHAT_ID,
+            text: messageText,
+            parse_mode: "HTML",
+          }),
+        },
+      );
+      return response.ok;
+    } catch (error) {
+      console.error("Ошибка отправки в Telegram:", error);
+      return false;
+    }
+  };
+
   const filteredProducts =
     selectedCategory === "Все"
       ? products
       : products.filter((p) => p.category === selectedCategory);
 
   const addToCart = (product) => {
+    setOrderSuccess(false);
     const existingIndex = cart.findIndex((item) => item.id === product.id);
     if (existingIndex > -1) {
       const newCart = [...cart];
@@ -174,24 +233,78 @@ export default function App() {
     0,
   );
 
-  const handleFormSubmit = (e) => {
+  // Индивидуальная заявка
+  const handleCustomFormSubmit = async (e) => {
     e.preventDefault();
-    if (formData.name && formData.phone) {
-      setFormSubmitted(true);
-      setFormData({ name: "", phone: "", comment: "" });
-      setTimeout(() => setFormSubmitted(false), 5000);
+    if (!formData.name || !formData.contact) return;
+
+    setIsSendingCustom(true);
+    const text =
+      `🎨 <b>Новая заявка на индивидуальное изделие!</b>\n\n` +
+      `👤 <b>Имя:</b> ${formData.name}\n` +
+      `📞 <b>Контакт (Почта/TG):</b> ${formData.contact}\n` +
+      `💬 <b>Пожелания:</b> ${formData.comment || "Не указаны"}`;
+
+    await sendToTelegram(text);
+    setIsSendingCustom(false);
+    setFormSubmitted(true);
+    setFormData({ name: "", contact: "", comment: "" });
+    setTimeout(() => setFormSubmitted(false), 6000);
+  };
+
+  // Оформление корзины
+  const handleCheckoutSubmit = async (e) => {
+    e.preventDefault();
+    if (!checkoutData.name || !checkoutData.contact || cart.length === 0)
+      return;
+
+    setIsCheckingOut(true);
+
+    const itemsList = cart
+      .map(
+        (item, idx) =>
+          `${idx + 1}. ${item.title} — ${item.quantity} шт. (${
+            item.price * item.quantity
+          } ₽)`,
+      )
+      .join("\n");
+
+    const text =
+      `<b>Новый заказ из корзины!</b>\n\n` +
+      `<b>Клиент:</b> ${checkoutData.name}\n` +
+      `<b>Связь (Почта/TG):</b> ${checkoutData.contact}\n` +
+      `<b>Комментарий:</b> ${checkoutData.comment || "Без комментариев"}\n\n` +
+      `b>Состав заказа:</b>\n${itemsList}\n\n` +
+      `<b>Итого: ${totalPrice} ₽</b>`;
+
+    const success = await sendToTelegram(text);
+    setIsCheckingOut(false);
+
+    if (success) {
+      setCart([]);
+      setCheckoutData({ name: "", contact: "", comment: "" });
+      setOrderSuccess(true);
+    } else {
+      alert(
+        "Не удалось отправить заказ. Пожалуйста, напишите нам напрямую в Telegram: @ala_pots",
+      );
     }
   };
 
   const themeStyles = {
     app: {
-      fontFamily: "'Segoe UI', Arial, sans-serif",
+      fontFamily: FONT_BODY,
       backgroundColor: "#FBF9F6",
       color: "#3E3835",
       minHeight: "100vh",
       margin: 0,
       padding: isMobile ? "69px 0 0 0" : "81px 0 0 0",
       overflowX: "hidden",
+    },
+    heading: {
+      fontFamily: FONT_HEADING,
+      fontWeight: "700",
+      letterSpacing: "0.3px",
     },
     header: {
       display: "flex",
@@ -210,8 +323,9 @@ export default function App() {
       boxShadow: "0 2px 10px rgba(62, 56, 53, 0.05)",
     },
     logo: {
-      fontSize: isMobile ? "20px" : "24px",
-      fontWeight: "bold",
+      fontFamily: FONT_HEADING,
+      fontSize: isMobile ? "24px" : "30px",
+      fontWeight: "700",
       letterSpacing: "0.5px",
       color: "#C37B67",
       whiteSpace: "nowrap",
@@ -264,9 +378,10 @@ export default function App() {
     tag: {
       fontSize: "12px",
       color: "#9CAF9C",
-      fontWeight: "bold",
+      fontWeight: "700",
       textTransform: "uppercase",
       marginBottom: "5px",
+      letterSpacing: "0.5px",
     },
     meta: {
       fontSize: "13px",
@@ -276,7 +391,7 @@ export default function App() {
     },
     price: {
       fontSize: "18px",
-      fontWeight: "bold",
+      fontWeight: "700",
       color: "#3E3835",
       marginTop: "auto",
       paddingTop: "15px",
@@ -326,13 +441,14 @@ export default function App() {
     },
     input: {
       width: "100%",
-      padding: "12px",
-      margin: "8px 0 18px 0",
+      padding: "11px 12px",
+      margin: "6px 0 14px 0",
       borderRadius: "8px",
-      border: "2px solid #E6DFD3",
+      border: "1.5px solid #E6DFD3",
       boxSizing: "border-box",
       fontSize: "14px",
-      fontFamily: "inherit",
+      fontFamily: FONT_BODY,
+      outline: "none",
     },
     modalOverlay: {
       position: "fixed",
@@ -351,10 +467,10 @@ export default function App() {
     modalContent: {
       backgroundColor: "#FFF",
       width: "100%",
-      maxWidth: "460px",
-      maxHeight: "85vh",
+      maxWidth: "480px",
+      maxHeight: "90vh",
       borderRadius: "16px",
-      padding: isMobile ? "20px" : "28px",
+      padding: isMobile ? "18px" : "26px",
       boxShadow: "0 15px 40px rgba(0,0,0,0.2)",
       display: "flex",
       flexDirection: "column",
@@ -363,6 +479,16 @@ export default function App() {
     filledBtn: {
       backgroundColor: "#C37B67",
       color: "#FFF",
+    },
+    linkBtn: {
+      background: "none",
+      border: "none",
+      color: "#C37B67",
+      textDecoration: "underline",
+      cursor: "pointer",
+      fontFamily: FONT_BODY,
+      fontSize: "13px",
+      padding: 0,
     },
   };
 
@@ -396,6 +522,10 @@ export default function App() {
               overflow: "hidden",
               cursor: "pointer",
               transition: "transform 0.2s ease",
+              backgroundColor: "#C37B67",
+              color: "#FFF",
+              fontSize: "20px",
+              textDecoration: "none",
             }}
             onMouseEnter={(e) =>
               (e.currentTarget.style.transform = "scale(1.08)")
@@ -420,7 +550,10 @@ export default function App() {
               fontSize: isMobile ? "13px" : "14px",
             }}
             activeStyle={{ backgroundColor: "#A86452" }}
-            onClick={() => setIsCartOpen(true)}
+            onClick={() => {
+              setOrderSuccess(false);
+              setIsCartOpen(true);
+            }}
           >
             Корзина ({totalItemsCount})
           </HoverButton>
@@ -431,17 +564,18 @@ export default function App() {
       <section style={themeStyles.hero}>
         <h1
           style={{
-            fontSize: isMobile ? "2rem" : "3rem",
+            ...themeStyles.heading,
+            fontSize: isMobile ? "2.4rem" : "3.6rem",
             marginBottom: "12px",
             color: "#3E3835",
-            lineHeight: 1.2,
+            lineHeight: 1.15,
           }}
         >
           Тепло рук в каждом изделии
         </h1>
         <p
           style={{
-            fontSize: isMobile ? "1rem" : "1.2rem",
+            fontSize: isMobile ? "1rem" : "1.15rem",
             color: "#7A726E",
             maxWidth: "600px",
             margin: "0 auto 28px auto",
@@ -467,19 +601,19 @@ export default function App() {
         </HoverButton>
       </section>
 
-      {/* Секция витрины */}
+      {/* Каталог */}
       <main id="catalog" style={{ padding: "20px 0" }}>
         <h2
           style={{
+            ...themeStyles.heading,
             textAlign: "center",
-            fontSize: isMobile ? "1.6rem" : "2rem",
+            fontSize: isMobile ? "2rem" : "2.6rem",
             marginTop: "10px",
           }}
         >
           Коллекции из мастерской
         </h2>
 
-        {/* Фильтры */}
         <div style={themeStyles.filterNav}>
           {["Все", "Чашки", "Куклы", "Фигурки"].map((cat) => (
             <HoverButton
@@ -499,7 +633,6 @@ export default function App() {
           ))}
         </div>
 
-        {/* Сетка товаров */}
         <div style={themeStyles.grid}>
           {filteredProducts.map((product) => (
             <div key={product.id} style={themeStyles.card}>
@@ -510,7 +643,13 @@ export default function App() {
               />
               <div style={themeStyles.cardContent}>
                 <span style={themeStyles.tag}>{product.category}</span>
-                <h3 style={{ margin: "5px 0 10px 0", fontSize: "18px" }}>
+                <h3
+                  style={{
+                    ...themeStyles.heading,
+                    margin: "4px 0 8px 0",
+                    fontSize: "22px",
+                  }}
+                >
                   {product.title}
                 </h3>
                 <p
@@ -548,7 +687,8 @@ export default function App() {
       <section style={themeStyles.sectionAbout}>
         <h2
           style={{
-            fontSize: isMobile ? "1.6rem" : "2rem",
+            ...themeStyles.heading,
+            fontSize: isMobile ? "2rem" : "2.6rem",
             marginTop: 0,
             marginBottom: "10px",
           }}
@@ -571,21 +711,45 @@ export default function App() {
 
         <div style={themeStyles.aboutGrid}>
           <div style={themeStyles.aboutCard}>
-            <h4 style={{ margin: "0 0 8px 0" }}>100% ручная лепка</h4>
+            <h4
+              style={{
+                ...themeStyles.heading,
+                fontSize: "21px",
+                margin: "0 0 8px 0",
+              }}
+            >
+              100% ручная лепка
+            </h4>
             <p style={{ margin: 0, fontSize: "14px", color: "#666" }}>
               Каждое изделие хранит отпечаток пальцев мастера и живую фактуру
               глины.
             </p>
           </div>
           <div style={themeStyles.aboutCard}>
-            <h4 style={{ margin: "0 0 8px 0" }}>Двойной обжиг</h4>
+            <h4
+              style={{
+                ...themeStyles.heading,
+                fontSize: "21px",
+                margin: "0 0 8px 0",
+              }}
+            >
+              Двойной обжиг
+            </h4>
             <p style={{ margin: 0, fontSize: "14px", color: "#666" }}>
               Обжигаем изделия в муфельной печи при температуре выше 1050 °C для
               прочности.
             </p>
           </div>
           <div style={themeStyles.aboutCard}>
-            <h4 style={{ margin: "0 0 8px 0" }}>Безопасные глазури</h4>
+            <h4
+              style={{
+                ...themeStyles.heading,
+                fontSize: "21px",
+                margin: "0 0 8px 0",
+              }}
+            >
+              Безопасные глазури
+            </h4>
             <p style={{ margin: 0, fontSize: "14px", color: "#666" }}>
               Используем только пищевые бессвинцовые глазури, подходящие для
               горячих напитков.
@@ -598,8 +762,9 @@ export default function App() {
       <section style={themeStyles.faqSection}>
         <h2
           style={{
+            ...themeStyles.heading,
             textAlign: "center",
-            fontSize: isMobile ? "1.6rem" : "2rem",
+            fontSize: isMobile ? "2rem" : "2.6rem",
             marginBottom: "25px",
           }}
         >
@@ -607,7 +772,16 @@ export default function App() {
         </h2>
         {FAQ_ITEMS.map((item, idx) => (
           <div key={idx} style={themeStyles.faqCard}>
-            <h4 style={{ margin: "0 0 8px 0", color: "#C37B67" }}>{item.q}</h4>
+            <h4
+              style={{
+                ...themeStyles.heading,
+                fontSize: "20px",
+                margin: "0 0 6px 0",
+                color: "#C37B67",
+              }}
+            >
+              {item.q}
+            </h4>
             <p
               style={{
                 margin: 0,
@@ -622,9 +796,16 @@ export default function App() {
         ))}
       </section>
 
-      {/* Форма заявки */}
+      {/* Индивидуальная заявка */}
       <section style={themeStyles.formSection}>
-        <h3 style={{ textAlign: "center", marginTop: 0, fontSize: "22px" }}>
+        <h3
+          style={{
+            ...themeStyles.heading,
+            textAlign: "center",
+            marginTop: 0,
+            fontSize: "26px",
+          }}
+        >
           Хотите что-то особенное?
         </h3>
         <p style={{ textAlign: "center", color: "#666", fontSize: "14px" }}>
@@ -637,15 +818,17 @@ export default function App() {
               backgroundColor: "#EDF7ED",
               color: "#1E4620",
               padding: "15px",
-              borderRadius: "6px",
+              borderRadius: "8px",
               textAlign: "center",
               marginTop: "20px",
+              fontSize: "14px",
             }}
           >
-            Спасибо! Мы свяжемся с вами в течение дня для обсуждения эскиза.
+            Спасибо! Ваша заявка отправлена мастеру. Мы свяжемся с вами в
+            течение дня.
           </div>
         ) : (
-          <form onSubmit={handleFormSubmit} style={{ marginTop: "20px" }}>
+          <form onSubmit={handleCustomFormSubmit} style={{ marginTop: "20px" }}>
             <label
               style={{ display: "block", fontWeight: "600", fontSize: "14px" }}
             >
@@ -670,11 +853,11 @@ export default function App() {
             <input
               type="text"
               required
-              placeholder="example@test.com или @username"
+              placeholder="example@mail.ru или @username"
               style={themeStyles.input}
-              value={formData.phone}
+              value={formData.contact}
               onChange={(e) =>
-                setFormData({ ...formData, phone: e.target.value })
+                setFormData({ ...formData, contact: e.target.value })
               }
             />
 
@@ -703,7 +886,7 @@ export default function App() {
             >
               <input
                 type="checkbox"
-                id="privacyCheck"
+                id="privacyCheckCustom"
                 required
                 style={{
                   marginTop: "3px",
@@ -712,25 +895,23 @@ export default function App() {
                 }}
               />
               <label
-                htmlFor="privacyCheck"
-                style={{ fontSize: "12px", color: "#666", lineHeight: "1.4" }}
+                htmlFor="privacyCheckCustom"
+                style={{ fontSize: "13px", color: "#5C5450", lineHeight: 1.4 }}
               >
                 Я соглашаюсь на обработку персональных данных в соответствии с{" "}
-                <span
+                <button
+                  type="button"
                   onClick={() => setIsPrivacyOpen(true)}
-                  style={{
-                    color: "#C37B67",
-                    textDecoration: "underline",
-                    cursor: "pointer",
-                  }}
+                  style={themeStyles.linkBtn}
                 >
-                  Политикой конфиденциальности
-                </span>
+                  политикой конфиденциальности
+                </button>
               </label>
             </div>
 
             <HoverButton
               type="submit"
+              disabled={isSendingCustom}
               style={{
                 ...themeStyles.filledBtn,
                 width: "100%",
@@ -740,7 +921,7 @@ export default function App() {
               }}
               activeStyle={{ backgroundColor: "#A86452" }}
             >
-              Отправить
+              {isSendingCustom ? "Отправляем..." : "Отправить заявку"}
             </HoverButton>
           </form>
         )}
@@ -761,11 +942,15 @@ export default function App() {
                 display: "flex",
                 justifyContent: "space-between",
                 alignItems: "center",
-                paddingBottom: "15px",
+                paddingBottom: "12px",
                 borderBottom: "1px solid #E6DFD3",
               }}
             >
-              <h3 style={{ margin: 0, fontSize: "20px" }}>Ваш заказ</h3>
+              <h3
+                style={{ ...themeStyles.heading, margin: 0, fontSize: "24px" }}
+              >
+                Ваш заказ
+              </h3>
               <button
                 style={{
                   background: "none",
@@ -785,11 +970,30 @@ export default function App() {
               style={{
                 flexGrow: 1,
                 overflowY: "auto",
-                margin: "15px 0",
-                paddingRight: "4px",
+                margin: "12px 0",
+                paddingRight: "6px",
               }}
             >
-              {cart.length === 0 ? (
+              {orderSuccess ? (
+                <div
+                  style={{
+                    backgroundColor: "#EDF7ED",
+                    color: "#1E4620",
+                    padding: "20px",
+                    borderRadius: "10px",
+                    textAlign: "center",
+                    margin: "20px 0",
+                  }}
+                >
+                  <h4 style={{ margin: "0 0 8px 0" }}>
+                    Заказ успешно отправлен!
+                  </h4>
+                  <p style={{ margin: 0, fontSize: "14px", lineHeight: 1.5 }}>
+                    Администратор получил состав вашей корзины и скоро свяжется
+                    с вами по указанным контактам для уточнения доставки.
+                  </p>
+                </div>
+              ) : cart.length === 0 ? (
                 <p
                   style={{
                     color: "#7A726E",
@@ -800,139 +1004,239 @@ export default function App() {
                   Корзина пока пуста. Самое время выбрать чашечку!
                 </p>
               ) : (
-                cart.map((item) => (
-                  <div
-                    key={item.id}
-                    style={{
-                      display: "flex",
-                      gap: "12px",
-                      padding: "12px 0",
-                      borderBottom: "1px solid #F3EFEA",
-                      alignItems: "center",
-                    }}
-                  >
-                    <img
-                      src={item.image}
-                      alt={item.title}
+                <>
+                  {cart.map((item) => (
+                    <div
+                      key={item.id}
                       style={{
-                        width: "54px",
-                        height: "54px",
-                        objectFit: "cover",
-                        borderRadius: "8px",
-                        flexShrink: 0,
+                        display: "flex",
+                        gap: "12px",
+                        padding: "10px 0",
+                        borderBottom: "1px solid #F3EFEA",
+                        alignItems: "center",
                       }}
-                    />
-                    <div style={{ flexGrow: 1 }}>
-                      <h4 style={{ margin: "0 0 4px 0", fontSize: "15px" }}>
-                        {item.title}
-                      </h4>
-                      <span style={{ fontSize: "13px", color: "#666" }}>
-                        {item.price} ₽ / шт.
-                      </span>
-
-                      <div
+                    >
+                      <img
+                        src={item.image}
+                        alt={item.title}
                         style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "8px",
-                          marginTop: "6px",
+                          width: "52px",
+                          height: "52px",
+                          objectFit: "cover",
+                          borderRadius: "8px",
+                          flexShrink: 0,
                         }}
-                      >
-                        <button
-                          onClick={() => updateQuantity(item.id, -1)}
-                          style={{
-                            width: "26px",
-                            height: "26px",
-                            borderRadius: "50%",
-                            border: "1px solid #C37B67",
-                            background: "none",
-                            color: "#C37B67",
-                            cursor: "pointer",
-                          }}
-                        >
-                          −
-                        </button>
-                        <span style={{ fontSize: "14px", fontWeight: "bold" }}>
-                          {item.quantity}
+                      />
+                      <div style={{ flexGrow: 1 }}>
+                        <h4 style={{ margin: "0 0 2px 0", fontSize: "15px" }}>
+                          {item.title}
+                        </h4>
+                        <span style={{ fontSize: "13px", color: "#666" }}>
+                          {item.price} ₽ / шт.
                         </span>
-                        <button
-                          onClick={() => updateQuantity(item.id, 1)}
+
+                        <div
                           style={{
-                            width: "26px",
-                            height: "26px",
-                            borderRadius: "50%",
-                            border: "1px solid #C37B67",
-                            background: "none",
-                            color: "#C37B67",
-                            cursor: "pointer",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "6px",
+                            marginTop: "4px",
                           }}
                         >
-                          +
-                        </button>
-                        <button
-                          style={{
-                            background: "none",
-                            border: "none",
-                            color: "#E11D48",
-                            cursor: "pointer",
-                            fontSize: "16px",
-                            marginLeft: "4px",
-                          }}
-                          title="Удалить"
-                          onClick={() => removeFromCart(item.id)}
-                        >
-                          ❌
-                        </button>
+                          <button
+                            type="button"
+                            onClick={() => updateQuantity(item.id, -1)}
+                            style={{
+                              width: "24px",
+                              height: "24px",
+                              borderRadius: "50%",
+                              border: "1px solid #C37B67",
+                              background: "none",
+                              color: "#C37B67",
+                              cursor: "pointer",
+                            }}
+                          >
+                            −
+                          </button>
+                          <span
+                            style={{ fontSize: "14px", fontWeight: "bold" }}
+                          >
+                            {item.quantity}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => updateQuantity(item.id, 1)}
+                            style={{
+                              width: "24px",
+                              height: "24px",
+                              borderRadius: "50%",
+                              border: "1px solid #C37B67",
+                              background: "none",
+                              color: "#C37B67",
+                              cursor: "pointer",
+                            }}
+                          >
+                            +
+                          </button>
+                          <button
+                            type="button"
+                            style={{
+                              background: "none",
+                              border: "none",
+                              color: "#E11D48",
+                              cursor: "pointer",
+                              fontSize: "14px",
+                              marginLeft: "4px",
+                            }}
+                            title="Удалить"
+                            onClick={() => removeFromCart(item.id)}
+                          >
+                            ✕
+                          </button>
+                        </div>
                       </div>
                     </div>
+                  ))}
+
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      fontWeight: "700",
+                      fontSize: "18px",
+                      margin: "16px 0",
+                      padding: "10px 12px",
+                      backgroundColor: "#FBF9F6",
+                      borderRadius: "8px",
+                    }}
+                  >
+                    <span>Итого к оплате:</span>
+                    <span>{totalPrice} ₽</span>
                   </div>
-                ))
+
+                  <form
+                    onSubmit={handleCheckoutSubmit}
+                    style={{
+                      borderTop: "1px solid #E6DFD3",
+                      paddingTop: "14px",
+                    }}
+                  >
+                    <h4
+                      style={{
+                        ...themeStyles.heading,
+                        fontSize: "20px",
+                        margin: "0 0 10px 0",
+                      }}
+                    >
+                      Контакты для связи
+                    </h4>
+
+                    <label
+                      style={{
+                        display: "block",
+                        fontWeight: "600",
+                        fontSize: "13px",
+                      }}
+                    >
+                      Ваше имя *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="Как к вам обращаться?"
+                      style={themeStyles.input}
+                      value={checkoutData.name}
+                      onChange={(e) =>
+                        setCheckoutData({
+                          ...checkoutData,
+                          name: e.target.value,
+                        })
+                      }
+                    />
+
+                    <label
+                      style={{
+                        display: "block",
+                        fontWeight: "600",
+                        fontSize: "13px",
+                      }}
+                    >
+                      Telegram или Электронная почта *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="@username или example@mail.ru"
+                      style={themeStyles.input}
+                      value={checkoutData.contact}
+                      onChange={(e) =>
+                        setCheckoutData({
+                          ...checkoutData,
+                          contact: e.target.value,
+                        })
+                      }
+                    />
+
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "flex-start",
+                        gap: "8px",
+                        marginBottom: "14px",
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        id="privacyCheckCart"
+                        required
+                        style={{
+                          marginTop: "3px",
+                          accentColor: "#C37B67",
+                          cursor: "pointer",
+                        }}
+                      />
+                      <label
+                        htmlFor="privacyCheckCart"
+                        style={{
+                          fontSize: "13px",
+                          color: "#5C5450",
+                          lineHeight: 1.4,
+                        }}
+                      >
+                        Соглашаюсь на обработку данных по{" "}
+                        <button
+                          type="button"
+                          onClick={() => setIsPrivacyOpen(true)}
+                          style={themeStyles.linkBtn}
+                        >
+                          политике конфиденциальности
+                        </button>
+                      </label>
+                    </div>
+
+                    <HoverButton
+                      type="submit"
+                      disabled={isCheckingOut}
+                      style={{
+                        ...themeStyles.filledBtn,
+                        width: "100%",
+                        padding: "12px",
+                        fontSize: "16px",
+                        borderRadius: "8px",
+                      }}
+                      activeStyle={{ backgroundColor: "#A86452" }}
+                    >
+                      {isCheckingOut ? "Отправляем заказ..." : "Оформить заказ"}
+                    </HoverButton>
+                  </form>
+                </>
               )}
             </div>
-
-            {cart.length > 0 && (
-              <div
-                style={{ paddingTop: "15px", borderTop: "1px solid #E6DFD3" }}
-              >
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    fontWeight: "bold",
-                    fontSize: "18px",
-                    marginBottom: "15px",
-                  }}
-                >
-                  <span>Итого:</span>
-                  <span>{totalPrice} ₽</span>
-                </div>
-                <HoverButton
-                  style={{
-                    ...themeStyles.filledBtn,
-                    width: "100%",
-                    padding: "12px",
-                    fontSize: "16px",
-                    borderRadius: "8px",
-                  }}
-                  activeStyle={{ backgroundColor: "#A86452" }}
-                  onClick={() => {
-                    alert(
-                      `Заказ на сумму ${totalPrice} ₽ оформлен! Спасибо за покупку.`,
-                    );
-                    setCart([]);
-                    setIsCartOpen(false);
-                  }}
-                >
-                  Оформить покупку
-                </HoverButton>
-              </div>
-            )}
           </div>
         </div>
       )}
 
-      {/* Модальное окно Политики конфиденциальности */}
-      {/* Модальное окно Политики конфиденциальности */}
+      {/* Модальное окно политики конфиденциальности */}
       {isPrivacyOpen && (
         <div
           style={themeStyles.modalOverlay}
@@ -942,7 +1246,6 @@ export default function App() {
             style={{ ...themeStyles.modalContent, maxWidth: "600px" }}
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Шапка модального окна с кнопкой закрытия */}
             <div
               style={{
                 display: "flex",
@@ -952,7 +1255,9 @@ export default function App() {
                 borderBottom: "1px solid #E6DFD3",
               }}
             >
-              <h3 style={{ margin: 0, fontSize: "18px" }}>
+              <h3
+                style={{ ...themeStyles.heading, margin: 0, fontSize: "22px" }}
+              >
                 Политика конфиденциальности
               </h3>
               <button
@@ -970,7 +1275,6 @@ export default function App() {
               </button>
             </div>
 
-            {/* Ваш текст с прокруткой */}
             <div
               style={{
                 overflowY: "auto",
@@ -985,7 +1289,6 @@ export default function App() {
               {PRIVACY_POLICY_TEXT}
             </div>
 
-            {/* Кнопка закрытия внизу */}
             <HoverButton
               style={{
                 ...themeStyles.filledBtn,
@@ -1012,23 +1315,6 @@ export default function App() {
           fontSize: "14px",
         }}
       >
-        <div style={{ marginTop: "10px" }}>
-          <button
-            type="button"
-            onClick={() => setIsPrivacyOpen(true)}
-            style={{
-              background: "none",
-              border: "none",
-              color: "#A39B93",
-              textDecoration: "underline",
-              fontSize: "12px",
-              cursor: "pointer",
-            }}
-          >
-            Политика конфиденциальности
-          </button>
-        </div>
-
         <div style={{ marginBottom: "8px" }}>
           © {new Date().getFullYear()} Руки в глине. Авторская керамика ручной
           работы.
@@ -1041,6 +1327,23 @@ export default function App() {
         >
           Мы в Telegram: @ala_pots
         </a>
+        <div style={{ marginTop: "10px" }}>
+          <button
+            type="button"
+            onClick={() => setIsPrivacyOpen(true)}
+            style={{
+              background: "none",
+              border: "none",
+              color: "#A39B93",
+              textDecoration: "underline",
+              fontSize: "12px",
+              cursor: "pointer",
+              fontFamily: FONT_BODY,
+            }}
+          >
+            Политика конфиденциальности
+          </button>
+        </div>
       </footer>
     </div>
   );
